@@ -1,5 +1,5 @@
-const cacheName = "lux-3-cache-v11";
-const assets = ["./", "./index.html", "./styles.css?v=11", "./app.js?v=11", "./supabase-config.js?v=11", "./manifest.webmanifest", "./icon.svg"];
+const cacheName = "lux-3-cache-v12";
+const assets = ["./styles.css?v=12", "./app.js?v=12", "./supabase-config.js?v=12", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(cacheName).then((cache) => cache.addAll(assets)));
@@ -15,5 +15,9 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request).catch(() => caches.match("./index.html")));
+    return;
+  }
   event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
 });
