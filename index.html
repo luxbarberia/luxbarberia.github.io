@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111111" />
+    <title>Lux 3.0</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css?v=10" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="brand" type="button" data-view="cliente" aria-label="Ir al inicio">
+          <span class="brand-mark">LUX</span>
+          <span>
+            <strong>Lux 3.0</strong>
+            <small>Barbería & turnos</small>
+          </span>
+        </button>
+
+        <nav class="mode-switch" aria-label="Secciones">
+          <button class="active" type="button" data-view="cliente">Cliente</button>
+          <button type="button" id="barber-access-button">Barberos</button>
+        </nav>
+      </header>
+
+      <main>
+        <section class="view active" id="cliente-view" aria-labelledby="cliente-title">
+          <div class="client-layout">
+            <aside class="studio-panel">
+              <div class="studio-photo" role="img" aria-label="Identidad visual de Lux Barbería">
+                <span>Lux</span>
+                <small>Barbería</small>
+              </div>
+              <div class="studio-info">
+                <p class="eyebrow">Abierto hoy · 10:00 a 20:00</p>
+                <h1 id="cliente-title">Tu cuenta Lux</h1>
+                <p>Entrás con tu WhatsApp, reservás turno y queda tu historial de cortes, visitas y pagos.</p>
+              </div>
+              <div class="quick-actions">
+                <a href="https://wa.me/5491134567890" target="_blank" rel="noreferrer">WhatsApp</a>
+                <a href="https://maps.google.com/?q=Lux+Barberia" target="_blank" rel="noreferrer">Ubicación</a>
+                <a href="https://instagram.com" target="_blank" rel="noreferrer">Instagram</a>
+              </div>
+            </aside>
+
+            <section class="booking-card" aria-label="Cuenta y reserva de turno">
+              <div class="booking-head">
+                <div>
+                  <p class="eyebrow">Acceso clientes</p>
+                  <h2 id="client-access-title">Ingresá con WhatsApp</h2>
+                </div>
+                <button class="icon-button" type="button" id="install-button" hidden title="Instalar app" aria-label="Instalar app">+</button>
+              </div>
+
+              <section class="login-card" id="login-card">
+                <form id="login-form">
+                  <label class="field">
+                    <span>Número de WhatsApp</span>
+                    <input id="login-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="Ej: 11 5555 5555" required />
+                  </label>
+                  <button class="primary full" type="submit">Entrar</button>
+                </form>
+
+                <form id="register-form" hidden>
+                  <p class="inline-note">No te encontramos en Lux. Cargá tus datos una sola vez.</p>
+                  <label class="field">
+                    <span>Nombre</span>
+                    <input name="firstName" autocomplete="given-name" placeholder="Ej: Nico" required />
+                  </label>
+                  <label class="field">
+                    <span>Apellido</span>
+                    <input name="lastName" autocomplete="family-name" placeholder="Ej: González" required />
+                  </label>
+                  <button class="primary full" type="submit">Crear cuenta Lux</button>
+                </form>
+              </section>
+
+              <section class="client-session" id="client-session" hidden>
+                <div class="session-head">
+                  <div>
+                    <p class="eyebrow">Cliente activo</p>
+                    <h2 id="client-name">Cliente Lux</h2>
+                    <p id="client-phone-line"></p>
+                  </div>
+                  <button class="secondary compact" type="button" id="logout-client">Salir</button>
+                </div>
+
+                <section class="profile-strip" aria-label="Resumen de cliente">
+                  <article>
+                    <span id="client-total-visits">0</span>
+                    <small>visitas</small>
+                  </article>
+                  <article>
+                    <span id="client-total-paid">$0</span>
+                    <small>pagado</small>
+                  </article>
+                  <article>
+                    <span id="client-next-appointment">Sin turno</span>
+                    <small>próximo</small>
+                  </article>
+                </section>
+
+                <div class="steps" aria-label="Progreso">
+                  <span class="step active" data-step-dot="1">Barbero</span>
+                  <span class="step" data-step-dot="2">Servicio</span>
+                  <span class="step" data-step-dot="3">Horario</span>
+                  <span class="step" data-step-dot="4">Detalle</span>
+                </div>
+
+                <form id="booking-form">
+                  <fieldset class="form-step active" data-step="1">
+                    <legend>Elegí con quién cortarte</legend>
+                    <div class="barber-grid" id="barber-list"></div>
+                  </fieldset>
+
+                  <fieldset class="form-step" data-step="2">
+                    <legend>Elegí qué te querés hacer</legend>
+                    <div class="service-grid" id="service-list"></div>
+                  </fieldset>
+
+                  <fieldset class="form-step" data-step="3">
+                    <legend>Elegí día y horario</legend>
+                    <label class="field">
+                      <span>Día</span>
+                      <input id="booking-date" name="date" type="date" required />
+                    </label>
+                    <div class="slot-grid" id="slot-list" aria-live="polite"></div>
+                  </fieldset>
+
+                  <fieldset class="form-step" data-step="4">
+                    <legend>Confirmá el turno</legend>
+                    <div class="selected-client">
+                      <strong id="selected-client-name"></strong>
+                      <span id="selected-client-phone"></span>
+                      <span id="selected-barber-name"></span>
+                    </div>
+                    <label class="field">
+                      <span>Nota opcional</span>
+                      <textarea name="note" rows="3" placeholder="Ej: quiero mantener el largo arriba"></textarea>
+                    </label>
+                  </fieldset>
+
+                  <div class="booking-summary" id="booking-summary">
+                    <span>Seleccioná un servicio para empezar</span>
+                  </div>
+
+                  <div class="form-actions">
+                    <button class="secondary" type="button" id="back-step">Volver</button>
+                    <button class="primary" type="button" id="next-step">Continuar</button>
+                    <button class="primary" type="submit" id="confirm-booking">Confirmar turno</button>
+                  </div>
+                </form>
+
+                <section class="manage-box" aria-label="Perfil del cliente">
+                  <div class="section-head">
+                    <h2>Mi Lux</h2>
+                    <span class="status-pill">WhatsApp ID</span>
+                  </div>
+                  <div class="client-appointments" id="client-appointments"></div>
+                  <h3>Historial</h3>
+                  <div class="history-list" id="client-history"></div>
+                </section>
+              </section>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="panel-view" aria-labelledby="panel-title">
+          <div class="panel-layout">
+            <section class="panel-hero">
+              <div>
+                <p class="eyebrow">Panel privado</p>
+                <h1 id="panel-title">Agenda Lux</h1>
+                <p id="barber-session-label">Vista semanal y agenda del día para pantalla de barbería.</p>
+              </div>
+              <div class="panel-actions">
+                <button class="secondary compact" type="button" id="open-admin">Administración</button>
+                <button class="secondary compact" type="button" id="logout-barber">Salir</button>
+                <button class="primary compact" type="button" id="new-demo-booking">Agregar turno demo</button>
+              </div>
+            </section>
+
+            <section class="metrics" aria-label="Resumen del negocio">
+              <article>
+                <span id="metric-today">0</span>
+                <small>turnos hoy</small>
+              </article>
+              <article>
+                <span id="metric-week">0</span>
+                <small>esta semana</small>
+              </article>
+              <article>
+                <span id="metric-pending">0</span>
+                <small>pendientes hoy</small>
+              </article>
+              <article>
+                <span id="metric-completed">0</span>
+                <small>terminados hoy</small>
+              </article>
+            </section>
+
+            <section class="workspace weekly-workspace">
+              <div class="section-head">
+                <div>
+                  <h2>Planificación semanal</h2>
+                  <p>Lunes a sábado · Franco y Vito</p>
+                </div>
+                <select id="weekly-barber-filter" aria-label="Filtrar barbero">
+                  <option value="all">Ambos</option>
+                  <option value="franco">Franco</option>
+                  <option value="vito">Vito</option>
+                </select>
+              </div>
+              <div class="weekly-calendar" id="weekly-calendar"></div>
+            </section>
+
+            <div class="panel-grid">
+              <section class="workspace">
+                <div class="section-head">
+                  <h2>Próximos turnos</h2>
+                  <input id="agenda-filter" type="search" placeholder="Buscar cliente" />
+                </div>
+                <div class="appointments" id="appointments-list"></div>
+              </section>
+
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="success-dialog">
+      <div class="dialog-content">
+        <p class="eyebrow">Turno confirmado</p>
+        <h2>Listo, quedó en la agenda</h2>
+        <p id="success-copy"></p>
+        <div class="dialog-actions">
+          <a class="primary" id="success-whatsapp" href="#" target="_blank" rel="noreferrer" hidden>Abrir WhatsApp</a>
+          <button class="secondary" type="button" id="close-dialog">Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="barber-login-dialog">
+      <div class="dialog-content">
+        <p class="eyebrow">Acceso barberos</p>
+        <h2 id="barber-login-title">Entrar al Panel Lux</h2>
+        <p id="barber-login-help">Este sector es solo para Franco, Vito o administración.</p>
+        <form id="barber-login-form" class="stack-form">
+          <label class="field">
+            <span>Barbero</span>
+            <select id="barber-login-select" name="barber">
+              <option value="franco">Franco</option>
+              <option value="vito">Vito</option>
+              <option value="admin">Administración</option>
+            </select>
+          </label>
+          <label class="field">
+            <span id="barber-password-label">Contraseña</span>
+            <input id="barber-password" name="password" type="password" autocomplete="current-password" placeholder="Clave del panel" required />
+          </label>
+          <label class="field" id="barber-password-confirm-field" hidden>
+            <span>Repetir contraseña</span>
+            <input id="barber-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" placeholder="Repetí la clave" />
+          </label>
+          <p class="form-error" id="barber-login-error" hidden>No pudimos entrar.</p>
+          <div class="dialog-actions">
+            <button class="primary" type="submit">Entrar</button>
+            <button class="secondary" type="button" id="close-barber-login">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </dialog>
+
+    <dialog id="admin-dialog" class="admin-dialog">
+      <div class="dialog-content admin-content">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Administración Lux</p>
+            <h2>Cuentas, clientes y promos</h2>
+          </div>
+          <button class="secondary compact" type="button" id="close-admin">Cerrar</button>
+        </div>
+
+        <section class="workspace ledger-workspace">
+          <div class="section-head">
+            <h2>Cuenta de barberos</h2>
+            <span class="status-pill">solo administración</span>
+          </div>
+          <div class="barber-ledger" id="barber-ledger"></div>
+        </section>
+
+        <section class="workspace cloud-workspace">
+          <div class="section-head">
+            <div>
+              <h2>Nube compartida</h2>
+              <p>Conectá Supabase para que clientes y barberos vean los mismos turnos.</p>
+            </div>
+            <span class="status-pill" id="cloud-status">Modo local</span>
+          </div>
+          <form id="cloud-config-form" class="cloud-form">
+            <label class="field">
+              <span>URL de Supabase</span>
+              <input id="cloud-url" name="url" type="url" placeholder="https://tu-proyecto.supabase.co" />
+            </label>
+            <label class="field">
+              <span>Clave pública anon</span>
+              <input id="cloud-key" name="anonKey" placeholder="eyJhbGciOi..." />
+            </label>
+            <button class="primary compact" type="submit">Guardar nube</button>
+            <button class="secondary compact" type="button" id="cloud-disconnect">Usar local</button>
+          </form>
+          <p class="inline-note compact-note" id="cloud-help">Cuando esté conectado, los cambios se actualizan en la tablet y en los teléfonos.</p>
+        </section>
+
+        <div class="admin-grid">
+          <section class="workspace">
+            <div class="section-head">
+              <h2>Cargar cliente</h2>
+            </div>
+            <form id="barber-client-form" class="stack-form">
+              <label class="field">
+                <span>Nombre</span>
+                <input name="firstName" placeholder="Ej: Lucas" required />
+              </label>
+              <label class="field">
+                <span>Apellido</span>
+                <input name="lastName" placeholder="Ej: Pérez" required />
+              </label>
+              <label class="field">
+                <span>WhatsApp</span>
+                <input name="phone" inputmode="tel" placeholder="Ej: 11 5555 5555" required />
+              </label>
+              <button class="primary full" type="submit">Guardar cliente</button>
+            </form>
+          </section>
+
+          <section class="workspace">
+            <div class="section-head">
+              <h2>Clientes</h2>
+              <button class="secondary compact" type="button" id="export-clients">Copiar lista</button>
+            </div>
+            <div class="client-list" id="client-list"></div>
+          </section>
+
+          <section class="workspace">
+            <div class="section-head">
+              <h2>Ficha</h2>
+              <span class="status-pill" id="selected-panel-client-status">Sin selección</span>
+            </div>
+            <div class="client-file" id="panel-client-file"></div>
+          </section>
+
+          <section class="workspace">
+            <div class="section-head">
+              <h2>Promos</h2>
+              <button class="secondary compact" type="button" id="generate-promo">Generar</button>
+            </div>
+            <textarea id="promo-text" rows="5">Hola! Esta semana en Lux tenemos promo de corte + barba. Si querés reservar, entrá al link de Lux 3.0 y elegí tu horario.</textarea>
+            <a class="primary full" id="promo-whatsapp" href="#" target="_blank" rel="noreferrer">Enviar por WhatsApp</a>
+          </section>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./supabase-config.js?v=10"></script>
+    <script src="./app.js?v=10"></script>
+  </body>
+</html>
