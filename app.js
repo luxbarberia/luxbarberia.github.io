@@ -120,6 +120,12 @@ const els = {
   barberSessionLabel: document.querySelector("#barber-session-label"),
   clientList: document.querySelector("#client-list"),
   barberClientForm: document.querySelector("#barber-client-form"),
+  manualBookingForm: document.querySelector("#manual-booking-form"),
+  manualBookingBarber: document.querySelector("#manual-booking-barber"),
+  manualBookingService: document.querySelector("#manual-booking-service"),
+  manualBookingDate: document.querySelector("#manual-booking-date"),
+  manualBookingTime: document.querySelector("#manual-booking-time"),
+  manualBookingStatus: document.querySelector("#manual-booking-status"),
   panelClientFile: document.querySelector("#panel-client-file"),
   selectedPanelClientStatus: document.querySelector("#selected-panel-client-status"),
   agendaFilter: document.querySelector("#agenda-filter"),
@@ -148,8 +154,11 @@ async function init() {
   migrateBookings();
   els.bookingDate.min = todayISO();
   els.bookingDate.value = state.date;
+  els.manualBookingDate.min = todayISO();
+  els.manualBookingDate.value = todayISO();
   renderBarbers();
   renderServices();
+  renderManualBookingOptions();
   renderSlots();
   renderStep();
   renderAuth();
@@ -355,15 +364,25 @@ function bindEvents() {
     renderWeeklyCalendar();
   });
 
-  els.barberClientForm.addEventListener("submit", (event) => {
+  els.manualBookingBarber.addEventListener("change", renderManualBookingSlots);
+  els.manualBookingDate.addEventListener("change", renderManualBookingSlots);
+
+  els.manualBookingForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    createManualBooking(new FormData(els.manualBookingForm));
+  });
+
+  els.barberClientForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(els.barberClientForm);
+    const photo = await imageFileToDataUrl(form.get("photo"));
     const client = upsertClient({
       phone: normalizePhone(form.get("phone")),
       firstName: String(form.get("firstName")).trim(),
       lastName: String(form.get("lastName")).trim(),
       notes: "",
       source: "barber",
+      photoData: photo,
     });
 
     if (!client) return;
@@ -584,6 +603,33 @@ function renderAdmin() {
   renderBarberLedger();
   renderClients();
   renderPanelClientFile();
+  renderManualBookingSlots();
+}
+
+function renderManualBookingOptions() {
+  els.manualBookingBarber.innerHTML = barbers
+    .map((barber) => `<option value="${barber.id}">${barber.name}</option>`)
+    .join("");
+  els.manualBookingService.innerHTML = services
+    .map((service) => `<option value="${service.id}">${service.name} · ${formatter.format(service.price)}</option>`)
+    .join("");
+  renderManualBookingSlots();
+}
+
+function renderManualBookingSlots() {
+  const barberId = els.manualBookingBarber.value || barbers[0].id;
+  const date = els.manualBookingDate.value || todayISO();
+  const taken = new Set(
+    getBookings()
+      .filter((booking) => booking.barberId === barberId && booking.date === date && booking.status === "confirmed")
+      .map((booking) => booking.time)
+  );
+  const options = slots.map((slot) => (
+    `<option value="${slot}" ${taken.has(slot) ? "disabled" : ""}>${slot}${taken.has(slot) ? " · ocupado" : ""}</option>`
+  ));
+  els.manualBookingTime.innerHTML = options.join("");
+  const firstAvailable = slots.find((slot) => !taken.has(slot));
+  els.manualBookingTime.value = firstAvailable || "";
 }
 
 function renderWeeklyCalendar() {
@@ -670,9 +716,14 @@ function renderPanelClientFile() {
 
   els.panelClientFile.innerHTML = `
     <div class="file-card">
-      <strong>${clientFullName(selected)}</strong>
-      <span>${formatPhone(selected.phone)}</span>
-      <span>${bookings.length} movimientos · ${formatter.format(paid)}</span>
+      <div class="file-card-main">
+        ${clientPhotoTemplate(selected, "large")}
+        <div>
+          <strong>${clientFullName(selected)}</strong>
+          <span>${formatPhone(selected.phone)}</span>
+          <span>${bookings.length} movimientos · ${formatter.format(paid)}</span>
+        </div>
+      </div>
     </div>
     <div class="history-list">
       ${bookings.length ? bookings.map(historyTemplate).join("") : "<p>Sin historial todavía.</p>"}
@@ -718,13 +769,24 @@ function clientRowTemplate(client) {
   const last = bookings.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))[0];
   return `
     <button class="client-row ${client.phone === state.panelSelectedPhone ? "active" : ""}" type="button" data-select-client="${client.phone}">
-      <div>
-        <strong>${clientFullName(client)}</strong>
-        <span>${formatPhone(client.phone)}</span>
+      <div class="client-row-main">
+        ${clientPhotoTemplate(client)}
+        <div>
+          <strong>${clientFullName(client)}</strong>
+          <span>${formatPhone(client.phone)}</span>
+        </div>
       </div>
       <span>${last ? `${getBarber(last.barberId).name} · ${getService(last.serviceId).name}` : "Nuevo"}</span>
     </button>
   `;
+}
+
+function clientPhotoTemplate(client, size = "") {
+  const initials = `${client.firstName?.[0] || ""}${client.lastName?.[0] || ""}`.toUpperCase() || "L";
+  const className = `client-photo ${size}`.trim();
+  return client.photoData
+    ? `<span class="${className}"><img src="${client.photoData}" alt="${clientFullName(client)}" /></span>`
+    : `<span class="${className}">${initials}</span>`;
 }
 
 function clientAppointmentTemplate(booking) {
@@ -901,6 +963,78 @@ function addDemoBooking() {
   renderSlots();
 }
 
+function createManualBooking(form) {
+  const phone = normalizePhone(form.get("phone"));
+  const firstName = String(form.get("firstName")).trim();
+  const lastName = String(form.get("lastName")).trim();
+  const barberId = String(form.get("barberId"));
+  const serviceId = String(form.get("serviceId"));
+  const date = String(form.get("date"));
+  const time = String(form.get("time"));
+  const existingClient = getClient(phone);
+
+  if (!phone || !firstName || !lastName || !barberId || !serviceId || !date || !time) {
+    showManualBookingStatus("Completá los datos del turno.");
+    return;
+  }
+
+  const taken = getBookings().some((booking) => (
+    booking.barberId === barberId &&
+    booking.date === date &&
+    booking.time === time &&
+    booking.status === "confirmed"
+  ));
+
+  if (taken) {
+    showManualBookingStatus("Ese horario ya está ocupado para ese barbero.");
+    renderManualBookingSlots();
+    return;
+  }
+
+  const client = upsertClient({
+    phone,
+    firstName,
+    lastName,
+    notes: existingClient?.notes || "",
+    source: existingClient?.source || "barber",
+    photoData: existingClient?.photoData || "",
+  });
+  const service = getService(serviceId);
+  const booking = {
+    id: crypto.randomUUID(),
+    barberId,
+    serviceId,
+    date,
+    time,
+    name: clientFullName(client),
+    phone: client.phone,
+    note: String(form.get("note")).trim() || "Turno cargado por barbero.",
+    paidAmount: service.price,
+    status: "confirmed",
+    createdAt: new Date().toISOString(),
+  };
+
+  saveBookings([...getBookings(), booking]);
+  state.panelSelectedPhone = client.phone;
+  els.manualBookingForm.reset();
+  els.manualBookingDate.value = todayISO();
+  showManualBookingStatus("Turno guardado en la agenda.", false);
+  renderAuth();
+  renderPanel();
+  renderAdmin();
+  renderSlots();
+}
+
+function showManualBookingStatus(message, isError = true) {
+  els.manualBookingStatus.textContent = message;
+  els.manualBookingStatus.hidden = false;
+  els.manualBookingStatus.classList.toggle("ok", !isError);
+  window.setTimeout(() => {
+    els.manualBookingStatus.hidden = true;
+    els.manualBookingStatus.classList.remove("ok");
+  }, 2400);
+}
+
 async function copyClients() {
   const text = getClients()
     .map((client) => `${clientFullName(client)} - ${formatPhone(client.phone)}`)
@@ -979,6 +1113,7 @@ function upsertClient(data) {
     notes: data.notes || existing?.notes || "",
     source: data.source || existing?.source || "client",
     createdAt: existing?.createdAt || todayISO(),
+    photoData: data.photoData || existing?.photoData || "",
   };
 
   saveClients(existing ? clients.map((item) => (item.phone === phone ? client : item)) : [...clients, client]);
@@ -1045,6 +1180,42 @@ function encodePassword(password) {
 
 function clientFullName(client) {
   return `${client.firstName} ${client.lastName}`.trim();
+}
+
+async function imageFileToDataUrl(file) {
+  if (!(file instanceof File) || !file.size) return "";
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  const size = 320;
+  canvas.width = size;
+  canvas.height = size;
+  const context = canvas.getContext("2d");
+  const scale = Math.max(size / image.width, size / image.height);
+  const width = image.width * scale;
+  const height = image.height * scale;
+  const x = (size - width) / 2;
+  const y = (size - height) / 2;
+  context.drawImage(image, x, y, width, height);
+  return canvas.toDataURL("image/jpeg", 0.76);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
 }
 
 function canClientModify(booking) {
@@ -1273,21 +1444,47 @@ function toCloudClient(client) {
     phone: client.phone,
     first_name: client.firstName,
     last_name: client.lastName,
-    notes: client.notes || "",
+    notes: packClientNotes(client),
     source: client.source || "client",
     created_at: client.createdAt || todayISO(),
   };
 }
 
 function fromCloudClient(client) {
+  const meta = unpackClientNotes(client.notes);
   return {
     phone: client.phone,
     firstName: client.first_name || "",
     lastName: client.last_name || "",
-    notes: client.notes || "",
+    notes: meta.notes,
+    photoData: meta.photoData,
     source: client.source || "client",
     createdAt: client.created_at || todayISO(),
   };
+}
+
+function packClientNotes(client) {
+  if (!client.photoData) return client.notes || "";
+  return JSON.stringify({
+    notes: client.notes || "",
+    photoData: client.photoData,
+  });
+}
+
+function unpackClientNotes(value) {
+  const text = value || "";
+  try {
+    const parsed = JSON.parse(text);
+    return {
+      notes: parsed.notes || "",
+      photoData: parsed.photoData || "",
+    };
+  } catch {
+    return {
+      notes: text,
+      photoData: "",
+    };
+  }
 }
 
 function toCloudBooking(booking) {

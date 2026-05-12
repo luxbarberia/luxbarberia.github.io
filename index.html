@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#070303" />
     <title>Lux 3.0</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <div class="app-shell">
@@ -292,7 +292,7 @@
           <div class="barber-ledger" id="barber-ledger"></div>
         </section>
 
-        <section class="workspace cloud-workspace">
+        <section class="workspace cloud-workspace" hidden>
           <div class="section-head">
             <div>
               <h2>Nube compartida</h2>
@@ -316,6 +316,57 @@
         </section>
 
         <div class="admin-grid">
+          <section class="workspace manual-booking-workspace">
+            <div class="section-head">
+              <div>
+                <h2>Reservar turno</h2>
+                <p>Para clientes que llaman o reservan por fuera de la app.</p>
+              </div>
+            </div>
+            <form id="manual-booking-form" class="stack-form">
+              <div class="form-split">
+                <label class="field">
+                  <span>WhatsApp</span>
+                  <input name="phone" inputmode="tel" placeholder="Ej: 11 5555 5555" required />
+                </label>
+                <label class="field">
+                  <span>Nombre</span>
+                  <input name="firstName" placeholder="Ej: Diego" required />
+                </label>
+              </div>
+              <div class="form-split">
+                <label class="field">
+                  <span>Apellido</span>
+                  <input name="lastName" placeholder="Ej: Ianni" required />
+                </label>
+                <label class="field">
+                  <span>Barbero</span>
+                  <select id="manual-booking-barber" name="barberId"></select>
+                </label>
+              </div>
+              <div class="form-split">
+                <label class="field">
+                  <span>Servicio</span>
+                  <select id="manual-booking-service" name="serviceId"></select>
+                </label>
+                <label class="field">
+                  <span>Día</span>
+                  <input id="manual-booking-date" name="date" type="date" required />
+                </label>
+              </div>
+              <label class="field">
+                <span>Horario disponible</span>
+                <select id="manual-booking-time" name="time" required></select>
+              </label>
+              <label class="field">
+                <span>Nota opcional</span>
+                <textarea name="note" rows="2" placeholder="Ej: viene por llamada"></textarea>
+              </label>
+              <p class="form-error" id="manual-booking-status" hidden></p>
+              <button class="primary full" type="submit">Guardar turno</button>
+            </form>
+          </section>
+
           <section class="workspace">
             <div class="section-head">
               <h2>Cargar cliente</h2>
@@ -332,6 +383,10 @@
               <label class="field">
                 <span>WhatsApp</span>
                 <input name="phone" inputmode="tel" placeholder="Ej: 11 5555 5555" required />
+              </label>
+              <label class="field">
+                <span>Foto del cliente</span>
+                <input name="photo" type="file" accept="image/*" />
               </label>
               <button class="primary full" type="submit">Guardar cliente</button>
             </form>
@@ -366,7 +421,7 @@
     </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./supabase-config.js?v=12"></script>
-    <script src="./app.js?v=12"></script>
+    <script src="./supabase-config.js?v=13"></script>
+    <script src="./app.js?v=13"></script>
   </body>
 </html>
