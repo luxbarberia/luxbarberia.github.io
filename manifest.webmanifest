@@ -4,8 +4,8 @@
   "description": "Sistema de turnos para Lux Barberia.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#fbfaf7",
-  "theme_color": "#111111",
+  "background_color": "#070303",
+  "theme_color": "#070303",
   "icons": [
     {
       "src": "./icon.svg",
