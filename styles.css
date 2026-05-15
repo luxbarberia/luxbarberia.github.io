@@ -1093,9 +1093,78 @@ dialog {
   max-height: min(860px, calc(100vh - 28px));
 }
 
+.planning-dialog {
+  width: min(1480px, calc(100vw - 22px));
+  max-height: min(940px, calc(100vh - 22px));
+}
+
 .admin-content {
   max-height: calc(100vh - 28px);
   overflow: auto;
+}
+
+.planning-content {
+  max-height: calc(100vh - 22px);
+  overflow: auto;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(255, 90, 36, 0.12), transparent 28%),
+    var(--surface-strong);
+}
+
+.planning-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding-bottom: 16px;
+  background: linear-gradient(180deg, var(--surface-strong), rgba(18, 7, 8, 0.88));
+}
+
+.planning-board {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.planning-day {
+  min-height: 260px;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(10, 4, 4, 0.88);
+}
+
+.planning-day header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  text-transform: capitalize;
+}
+
+.planning-day header span,
+.planning-stack p,
+.planning-booking small,
+.planning-booking span {
+  color: var(--muted);
+}
+
+.planning-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.planning-booking {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border-left: 4px solid var(--gold);
+  border-radius: 6px;
+  background: rgba(240, 179, 90, 0.11);
 }
 
 .admin-grid {
@@ -1141,6 +1210,10 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 
+  .planning-board {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
   .cloud-form {
     grid-template-columns: 1fr;
   }
@@ -1177,6 +1250,10 @@ dialog::backdrop {
   .form-actions,
   .dialog-actions {
     flex-direction: column-reverse;
+  }
+
+  .planning-board {
+    grid-template-columns: 1fr;
   }
 
   .primary,

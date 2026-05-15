@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#070303" />
     <title>Lux 3.0</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=13" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
   </head>
   <body>
     <div class="app-shell">
@@ -176,6 +176,7 @@
                 <p id="barber-session-label">Vista semanal y agenda del día para pantalla de barbería.</p>
               </div>
               <div class="panel-actions">
+                <button class="primary compact" type="button" id="open-planning">Ver planificación</button>
                 <button class="secondary compact" type="button" id="open-admin">Administración</button>
                 <button class="secondary compact" type="button" id="logout-barber">Salir</button>
                 <button class="primary compact" type="button" id="new-demo-booking">Agregar turno demo</button>
@@ -271,6 +272,26 @@
             <button class="secondary" type="button" id="close-barber-login">Cancelar</button>
           </div>
         </form>
+      </div>
+    </dialog>
+
+    <dialog id="planning-dialog" class="planning-dialog">
+      <div class="dialog-content planning-content">
+        <div class="section-head planning-head">
+          <div>
+            <p class="eyebrow">Pantalla Lux</p>
+            <h2>Planificación 14 días</h2>
+          </div>
+          <div class="panel-actions">
+            <select id="planning-barber-filter" aria-label="Filtrar barbero">
+              <option value="all">Ambos</option>
+              <option value="franco">Franco</option>
+              <option value="vito">Vito</option>
+            </select>
+            <button class="secondary compact" type="button" id="close-planning">Cerrar</button>
+          </div>
+        </div>
+        <div class="planning-board" id="planning-board"></div>
       </div>
     </dialog>
 
@@ -421,7 +442,7 @@
     </dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./supabase-config.js?v=13"></script>
-    <script src="./app.js?v=13"></script>
+    <script src="./supabase-config.js?v=14"></script>
+    <script src="./app.js?v=14"></script>
   </body>
 </html>

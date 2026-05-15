@@ -10,13 +10,14 @@ const services = [
   { id: "perfilado", name: "Perfilado", duration: 20, price: 4500, detail: "Contornos y retoque rápido." },
 ];
 
-const slots = ["10:00", "10:45", "11:30", "12:15", "14:15", "15:00", "15:45", "16:30", "17:15", "18:00", "18:45", "19:30"];
+const slots = buildSlots("10:00", "19:30", 30);
 const bookingStoreKey = "lux-3-bookings";
 const clientStoreKey = "lux-3-clients";
 const activeClientKey = "lux-3-active-client";
 const barberSessionKey = "lux-3-barber-session";
 const barberPasswordStoreKey = "lux-3-barber-passwords";
 const cloudConfigStoreKey = "lux-3-supabase-config";
+const fixedBarberPassword = "BarberiaLux";
 
 const defaultClients = [
   { phone: "5491140228811", firstName: "Fede", lastName: "Martínez", notes: "Cliente frecuente de combo.", createdAt: todayISO(), source: "barber" },
@@ -42,6 +43,7 @@ const state = {
   panelSelectedPhone: "",
   pendingPhone: "",
   weeklyBarberFilter: "all",
+  planningBarberFilter: "all",
   barberSession: JSON.parse(sessionStorage.getItem(barberSessionKey) || "null"),
   deferredInstallPrompt: null,
   clients: readStoredList(clientStoreKey),
@@ -116,6 +118,11 @@ const els = {
   adminDialog: document.querySelector("#admin-dialog"),
   openAdmin: document.querySelector("#open-admin"),
   closeAdmin: document.querySelector("#close-admin"),
+  planningDialog: document.querySelector("#planning-dialog"),
+  openPlanning: document.querySelector("#open-planning"),
+  closePlanning: document.querySelector("#close-planning"),
+  planningBoard: document.querySelector("#planning-board"),
+  planningBarberFilter: document.querySelector("#planning-barber-filter"),
   logoutBarber: document.querySelector("#logout-barber"),
   barberSessionLabel: document.querySelector("#barber-session-label"),
   clientList: document.querySelector("#client-list"),
@@ -190,23 +197,9 @@ function bindEvents() {
     event.preventDefault();
     const form = new FormData(els.barberLoginForm);
     const password = String(form.get("password")).trim();
-    const passwordConfirm = String(form.get("passwordConfirm")).trim();
     const barber = String(form.get("barber"));
-    const savedPassword = getBarberPassword(barber);
 
-    if (!savedPassword) {
-      if (password.length < 4) {
-        showBarberLoginError("La contraseña tiene que tener al menos 4 caracteres.");
-        return;
-      }
-
-      if (password !== passwordConfirm) {
-        showBarberLoginError("Las contraseñas no coinciden.");
-        return;
-      }
-
-      saveBarberPassword(barber, password);
-    } else if (!matchesBarberPassword(barber, password)) {
+    if (!matchesBarberPassword(barber, password)) {
       showBarberLoginError("Contraseña incorrecta.");
       return;
     }
@@ -293,7 +286,7 @@ function bindEvents() {
   els.bookingForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const client = getActiveClient();
-    if (!client || !state.time) return;
+    if (!client || !state.time || !canReserveSlot(state.date, state.time)) return;
 
     const service = getService(state.serviceId);
     const form = new FormData(els.bookingForm);
@@ -352,6 +345,15 @@ function bindEvents() {
     els.adminDialog.showModal();
   });
   els.closeAdmin.addEventListener("click", () => els.adminDialog.close());
+  els.openPlanning.addEventListener("click", () => {
+    renderPlanningBoard();
+    els.planningDialog.showModal();
+  });
+  els.closePlanning.addEventListener("click", () => els.planningDialog.close());
+  els.planningBarberFilter.addEventListener("change", () => {
+    state.planningBarberFilter = els.planningBarberFilter.value;
+    renderPlanningBoard();
+  });
   els.logoutBarber.addEventListener("click", () => {
     state.barberSession = null;
     sessionStorage.removeItem(barberSessionKey);
@@ -427,17 +429,14 @@ function openBarberLogin() {
 
 function renderBarberLoginMode() {
   const selectedRole = els.barberLoginSelect.value;
-  const hasPassword = Boolean(getBarberPassword(selectedRole));
   const label = selectedRole === "admin" ? "Administración" : getBarber(selectedRole).name;
 
-  els.barberLoginTitle.textContent = hasPassword ? `Entrar como ${label}` : `Crear clave para ${label}`;
-  els.barberLoginHelp.textContent = hasPassword
-    ? "Ingresá la contraseña de este acceso de barbero."
-    : "Primera vez en este dispositivo: creá una contraseña para este acceso.";
-  els.barberPasswordLabel.textContent = hasPassword ? "Contraseña" : "Nueva contraseña";
-  els.barberPassword.placeholder = hasPassword ? "Clave del panel" : "Mínimo 4 caracteres";
-  els.barberPasswordConfirmField.hidden = hasPassword;
-  els.barberPasswordConfirm.required = !hasPassword;
+  els.barberLoginTitle.textContent = `Entrar como ${label}`;
+  els.barberLoginHelp.textContent = "Ingresá la clave privada del panel Lux.";
+  els.barberPasswordLabel.textContent = "Contraseña";
+  els.barberPassword.placeholder = "Clave del panel";
+  els.barberPasswordConfirmField.hidden = true;
+  els.barberPasswordConfirm.required = false;
   els.barberLoginError.hidden = true;
 }
 
@@ -547,11 +546,14 @@ function renderSlots() {
   );
 
   els.slotList.innerHTML = slots
-    .map((slot) => `
-      <button class="slot-button ${slot === state.time ? "active" : ""}" type="button" data-slot="${slot}" ${taken.has(slot) ? "disabled" : ""}>
+    .map((slot) => {
+      const unavailable = taken.has(slot) || !canReserveSlot(state.date, slot);
+      return `
+      <button class="slot-button ${slot === state.time ? "active" : ""}" type="button" data-slot="${slot}" ${unavailable ? "disabled" : ""}>
         ${slot}
       </button>
-    `)
+    `;
+    })
     .join("");
 
   els.slotList.querySelectorAll("button:not(:disabled)").forEach((button) => {
@@ -659,6 +661,31 @@ function renderWeeklyCalendar() {
     .join("");
 }
 
+function renderPlanningBoard() {
+  const days = getPlanningDates();
+  const selectedBarbers = state.planningBarberFilter === "all" ? barbers : barbers.filter((barber) => barber.id === state.planningBarberFilter);
+  const start = days[0].iso;
+  const end = days[days.length - 1].iso;
+  const bookings = getBookings()
+    .filter((booking) => booking.date >= start && booking.date <= end && booking.status === "confirmed")
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+
+  els.planningBoard.innerHTML = days.map((day) => {
+    const dayBookings = bookings.filter((booking) => booking.date === day.iso && selectedBarbers.some((barber) => barber.id === booking.barberId));
+    return `
+      <article class="planning-day">
+        <header>
+          <strong>${day.label}</strong>
+          <span>${day.short}</span>
+        </header>
+        <div class="planning-stack">
+          ${dayBookings.length ? dayBookings.map(planningBookingTemplate).join("") : "<p>Libre</p>"}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
 function renderBarberLedger() {
   const completed = getBookings().filter((booking) => booking.status === "completed");
   els.barberLedger.innerHTML = barbers
@@ -725,10 +752,51 @@ function renderPanelClientFile() {
         </div>
       </div>
     </div>
+    <form class="client-edit-form stack-form" id="client-edit-form">
+      <div class="form-split">
+        <label class="field">
+          <span>Nombre</span>
+          <input name="firstName" value="${escapeAttribute(selected.firstName)}" required />
+        </label>
+        <label class="field">
+          <span>Apellido</span>
+          <input name="lastName" value="${escapeAttribute(selected.lastName)}" required />
+        </label>
+      </div>
+      <label class="field">
+        <span>WhatsApp</span>
+        <input name="phone" inputmode="tel" value="${formatPhone(selected.phone)}" required />
+      </label>
+      <label class="field">
+        <span>Estado</span>
+        <select name="status">
+          <option value="active" ${getClientStatus(selected) === "active" ? "selected" : ""}>Activo</option>
+          <option value="inactive" ${getClientStatus(selected) === "inactive" ? "selected" : ""}>Inactivo</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Foto del cliente</span>
+        <input name="photo" type="file" accept="image/*" />
+      </label>
+      <button class="secondary full" type="submit">Guardar ficha</button>
+    </form>
     <div class="history-list">
       ${bookings.length ? bookings.map(historyTemplate).join("") : "<p>Sin historial todavía.</p>"}
     </div>
   `;
+
+  document.querySelector("#client-edit-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const photo = await imageFileToDataUrl(form.get("photo"));
+    updateClientProfile(selected.phone, {
+      phone: normalizePhone(form.get("phone")),
+      firstName: String(form.get("firstName")).trim(),
+      lastName: String(form.get("lastName")).trim(),
+      status: String(form.get("status")),
+      photoData: photo,
+    });
+  });
 }
 
 function appointmentTemplate(booking) {
@@ -764,16 +832,29 @@ function calendarBookingTemplate(booking) {
   `;
 }
 
+function planningBookingTemplate(booking) {
+  const service = getService(booking.serviceId);
+  const barber = getBarber(booking.barberId);
+  return `
+    <div class="planning-booking" style="border-left-color: ${barber.color}">
+      <strong>${booking.time} · ${barber.name}</strong>
+      <span>${booking.name}</span>
+      <small>${service.name}</small>
+    </div>
+  `;
+}
+
 function clientRowTemplate(client) {
   const bookings = getBookings().filter((booking) => normalizePhone(booking.phone) === client.phone && booking.status !== "cancelled");
   const last = bookings.sort((a, b) => `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`))[0];
+  const status = getClientStatus(client);
   return `
     <button class="client-row ${client.phone === state.panelSelectedPhone ? "active" : ""}" type="button" data-select-client="${client.phone}">
       <div class="client-row-main">
         ${clientPhotoTemplate(client)}
         <div>
           <strong>${clientFullName(client)}</strong>
-          <span>${formatPhone(client.phone)}</span>
+          <span>${formatPhone(client.phone)} · ${status === "inactive" ? "Inactivo" : "Activo"}</span>
         </div>
       </div>
       <span>${last ? `${getBarber(last.barberId).name} · ${getService(last.serviceId).name}` : "Nuevo"}</span>
@@ -824,13 +905,15 @@ function historyTemplate(booking) {
 function renderMetrics(bookings) {
   const today = todayISO();
   const weekLimit = offsetDateISO(7);
-  const todayBookings = bookings.filter((booking) => booking.date === today);
-  const weekBookings = bookings.filter((booking) => booking.date >= today && booking.date <= weekLimit);
+  const allBookings = getBookings().filter((booking) => booking.status !== "cancelled");
+  const todayBookings = allBookings.filter((booking) => booking.date === today);
+  const weekBookings = allBookings.filter((booking) => booking.date >= today && booking.date <= weekLimit);
+  const pendingToday = getBookings().filter((booking) => booking.date === today && booking.status === "confirmed");
   const completedToday = getBookings().filter((booking) => booking.date === today && booking.status === "completed");
 
   els.metricToday.textContent = todayBookings.length;
   els.metricWeek.textContent = weekBookings.length;
-  els.metricPending.textContent = todayBookings.length;
+  els.metricPending.textContent = pendingToday.length;
   els.metricCompleted.textContent = completedToday.length;
 }
 
@@ -846,7 +929,7 @@ function updateSummary() {
 function canAdvance() {
   if (state.step === 1) return Boolean(state.barberId);
   if (state.step === 2) return Boolean(state.serviceId);
-  if (state.step === 3) return Boolean(state.date && state.time);
+  if (state.step === 3) return Boolean(state.date && state.time && canReserveSlot(state.date, state.time));
   return true;
 }
 
@@ -1025,6 +1108,42 @@ function createManualBooking(form) {
   renderSlots();
 }
 
+function updateClientProfile(originalPhone, data) {
+  const nextPhone = normalizePhone(data.phone);
+  if (!nextPhone || !data.firstName || !data.lastName) return;
+  const clients = getClients();
+  const current = getClient(originalPhone);
+  if (!current) return;
+
+  const updated = {
+    ...current,
+    phone: nextPhone,
+    firstName: data.firstName,
+    lastName: data.lastName,
+    status: data.status || "active",
+    photoData: data.photoData || current.photoData || "",
+  };
+
+  saveClients(clients.map((client) => (client.phone === normalizePhone(originalPhone) ? updated : client)));
+
+  if (nextPhone !== normalizePhone(originalPhone)) {
+    saveBookings(getBookings().map((booking) => (
+      normalizePhone(booking.phone) === normalizePhone(originalPhone)
+        ? { ...booking, phone: nextPhone, name: clientFullName(updated) }
+        : booking
+    )));
+  } else {
+    saveBookings(getBookings().map((booking) => (
+      normalizePhone(booking.phone) === nextPhone ? { ...booking, name: clientFullName(updated) } : booking
+    )));
+  }
+
+  state.panelSelectedPhone = nextPhone;
+  renderAuth();
+  renderPanel();
+  renderAdmin();
+}
+
 function showManualBookingStatus(message, isError = true) {
   els.manualBookingStatus.textContent = message;
   els.manualBookingStatus.hidden = false;
@@ -1114,6 +1233,7 @@ function upsertClient(data) {
     source: data.source || existing?.source || "client",
     createdAt: existing?.createdAt || todayISO(),
     photoData: data.photoData || existing?.photoData || "",
+    status: data.status || existing?.status || "active",
   };
 
   saveClients(existing ? clients.map((item) => (item.phone === phone ? client : item)) : [...clients, client]);
@@ -1157,25 +1277,32 @@ function getBarber(id) {
 }
 
 function getBarberPasswords() {
-  return JSON.parse(localStorage.getItem(barberPasswordStoreKey) || "{}");
+  localStorage.removeItem(barberPasswordStoreKey);
+  return {};
 }
 
 function getBarberPassword(role) {
-  return getBarberPasswords()[role] || "";
+  return fixedBarberPassword;
 }
 
 function saveBarberPassword(role, password) {
-  const passwords = getBarberPasswords();
-  passwords[role] = encodePassword(password);
-  localStorage.setItem(barberPasswordStoreKey, JSON.stringify(passwords));
+  localStorage.removeItem(barberPasswordStoreKey);
 }
 
 function matchesBarberPassword(role, password) {
-  return getBarberPassword(role) === encodePassword(password);
+  return normalizeAccessPassword(password) === normalizeAccessPassword(fixedBarberPassword);
 }
 
 function encodePassword(password) {
   return btoa(unescape(encodeURIComponent(password)));
+}
+
+function normalizeAccessPassword(password) {
+  return String(password || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
 }
 
 function clientFullName(client) {
@@ -1222,6 +1349,10 @@ function canClientModify(booking) {
   return bookingDateTime(booking).getTime() - Date.now() > 60 * 60 * 1000;
 }
 
+function canReserveSlot(date, time) {
+  return new Date(`${date}T${time}:00`).getTime() - Date.now() >= 60 * 60 * 1000;
+}
+
 function bookingDateTime(booking) {
   return new Date(`${booking.date}T${booking.time}:00`);
 }
@@ -1241,6 +1372,33 @@ function getCurrentWeekDates() {
       short: new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(date),
     };
   });
+}
+
+function getPlanningDates() {
+  const today = new Date(`${todayISO()}T12:00:00`);
+  return Array.from({ length: 14 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+    return {
+      iso: toLocalISO(date),
+      label: new Intl.DateTimeFormat("es-AR", { weekday: "long" }).format(date),
+      short: new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "short" }).format(date),
+    };
+  });
+}
+
+function buildSlots(start, end, minutesStep) {
+  const [startHour, startMinute] = start.split(":").map(Number);
+  const [endHour, endMinute] = end.split(":").map(Number);
+  const startTotal = startHour * 60 + startMinute;
+  const endTotal = endHour * 60 + endMinute;
+  const result = [];
+  for (let total = startTotal; total <= endTotal; total += minutesStep) {
+    const hour = String(Math.floor(total / 60)).padStart(2, "0");
+    const minute = String(total % 60).padStart(2, "0");
+    result.push(`${hour}:${minute}`);
+  }
+  return result;
 }
 
 function makeSeedBooking(id, barberId, serviceId, date, time, name, phone, note, status) {
@@ -1301,6 +1459,14 @@ function formatDate(value) {
     day: "2-digit",
     month: "short",
   }).format(new Date(`${value}T12:00:00`));
+}
+
+function escapeAttribute(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function installApp() {
@@ -1458,16 +1624,18 @@ function fromCloudClient(client) {
     lastName: client.last_name || "",
     notes: meta.notes,
     photoData: meta.photoData,
+    status: meta.status,
     source: client.source || "client",
     createdAt: client.created_at || todayISO(),
   };
 }
 
 function packClientNotes(client) {
-  if (!client.photoData) return client.notes || "";
+  if (!client.photoData && (!client.status || client.status === "active")) return client.notes || "";
   return JSON.stringify({
     notes: client.notes || "",
     photoData: client.photoData,
+    status: client.status || "active",
   });
 }
 
@@ -1478,13 +1646,19 @@ function unpackClientNotes(value) {
     return {
       notes: parsed.notes || "",
       photoData: parsed.photoData || "",
+      status: parsed.status || "active",
     };
   } catch {
     return {
       notes: text,
       photoData: "",
+      status: "active",
     };
   }
+}
+
+function getClientStatus(client) {
+  return client.status === "inactive" ? "inactive" : "active";
 }
 
 function toCloudBooking(booking) {
