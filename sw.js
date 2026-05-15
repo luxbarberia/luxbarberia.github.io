@@ -1,5 +1,5 @@
-const cacheName = "lux-3-cache-v14";
-const assets = ["./styles.css?v=14", "./app.js?v=14", "./supabase-config.js?v=14", "./manifest.webmanifest", "./icon.svg"];
+const cacheName = "lux-3-cache-v15";
+const assets = ["./styles.css?v=15", "./app.js?v=15", "./supabase-config.js?v=15", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(cacheName).then((cache) => cache.addAll(assets)));

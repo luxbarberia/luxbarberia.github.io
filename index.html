@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#070303" />
     <title>Lux 3.0</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <div class="app-shell">
@@ -423,14 +423,6 @@
 
           <section class="workspace">
             <div class="section-head">
-              <h2>Ficha</h2>
-              <span class="status-pill" id="selected-panel-client-status">Sin selección</span>
-            </div>
-            <div class="client-file" id="panel-client-file"></div>
-          </section>
-
-          <section class="workspace">
-            <div class="section-head">
               <h2>Promos</h2>
               <button class="secondary compact" type="button" id="generate-promo">Generar</button>
             </div>
@@ -441,8 +433,21 @@
       </div>
     </dialog>
 
+    <dialog id="client-file-dialog" class="client-file-dialog">
+      <div class="dialog-content client-file-content">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Ficha de cliente</p>
+            <h2 id="client-file-title">Cliente Lux</h2>
+          </div>
+          <button class="secondary compact" type="button" id="close-client-file">Cerrar</button>
+        </div>
+        <div id="client-file-body"></div>
+      </div>
+    </dialog>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="./supabase-config.js?v=14"></script>
-    <script src="./app.js?v=14"></script>
+    <script src="./supabase-config.js?v=15"></script>
+    <script src="./app.js?v=15"></script>
   </body>
 </html>

@@ -1098,7 +1098,17 @@ dialog {
   max-height: min(940px, calc(100vh - 22px));
 }
 
+.client-file-dialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(820px, calc(100vh - 28px));
+}
+
 .admin-content {
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+}
+
+.client-file-content {
   max-height: calc(100vh - 28px);
   overflow: auto;
 }
@@ -1165,6 +1175,10 @@ dialog {
   border-left: 4px solid var(--gold);
   border-radius: 6px;
   background: rgba(240, 179, 90, 0.11);
+}
+
+.client-edit-form {
+  margin: 16px 0;
 }
 
 .admin-grid {

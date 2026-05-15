@@ -15,22 +15,13 @@ const bookingStoreKey = "lux-3-bookings";
 const clientStoreKey = "lux-3-clients";
 const activeClientKey = "lux-3-active-client";
 const barberSessionKey = "lux-3-barber-session";
-const barberPasswordStoreKey = "lux-3-barber-passwords";
+const legacyBarberPasswordStoreKey = "lux-3-barber-passwords";
+const barberPasswordStoreKey = "lux-3-barber-passwords-v2";
 const cloudConfigStoreKey = "lux-3-supabase-config";
-const fixedBarberPassword = "BarberiaLux";
+const resetStoreKey = "lux-3-reset-2026-05-14";
 
-const defaultClients = [
-  { phone: "5491140228811", firstName: "Fede", lastName: "Martínez", notes: "Cliente frecuente de combo.", createdAt: todayISO(), source: "barber" },
-  { phone: "5491167883044", firstName: "Mati", lastName: "Rojas", notes: "", createdAt: todayISO(), source: "barber" },
-  { phone: "5491121907755", firstName: "Santi", lastName: "López", notes: "Prefiere turno tarde.", createdAt: todayISO(), source: "barber" },
-];
-
-const defaultBookings = [
-  makeSeedBooking("demo-1", "franco", "combo", todayISO(), "11:30", "Fede Martínez", "5491140228811", "Quiere barba marcada.", "confirmed"),
-  makeSeedBooking("demo-2", "vito", "corte", todayISO(), "15:00", "Mati Rojas", "5491167883044", "", "confirmed"),
-  makeSeedBooking("demo-3", "franco", "barba", offsetDateISO(2), "18:00", "Santi López", "5491121907755", "Pasa después del trabajo.", "confirmed"),
-  makeSeedBooking("demo-4", "vito", "corte", offsetDateISO(-25), "16:30", "Fede Martínez", "5491140228811", "Corte clásico.", "completed"),
-];
+const defaultClients = [];
+const defaultBookings = [];
 
 const state = {
   view: "cliente",
@@ -118,6 +109,10 @@ const els = {
   adminDialog: document.querySelector("#admin-dialog"),
   openAdmin: document.querySelector("#open-admin"),
   closeAdmin: document.querySelector("#close-admin"),
+  clientFileDialog: document.querySelector("#client-file-dialog"),
+  closeClientFile: document.querySelector("#close-client-file"),
+  clientFileTitle: document.querySelector("#client-file-title"),
+  clientFileBody: document.querySelector("#client-file-body"),
   planningDialog: document.querySelector("#planning-dialog"),
   openPlanning: document.querySelector("#open-planning"),
   closePlanning: document.querySelector("#close-planning"),
@@ -133,8 +128,6 @@ const els = {
   manualBookingDate: document.querySelector("#manual-booking-date"),
   manualBookingTime: document.querySelector("#manual-booking-time"),
   manualBookingStatus: document.querySelector("#manual-booking-status"),
-  panelClientFile: document.querySelector("#panel-client-file"),
-  selectedPanelClientStatus: document.querySelector("#selected-panel-client-status"),
   agendaFilter: document.querySelector("#agenda-filter"),
   metricToday: document.querySelector("#metric-today"),
   metricWeek: document.querySelector("#metric-week"),
@@ -157,6 +150,7 @@ const els = {
 init();
 
 async function init() {
+  resetLocalDemoData();
   seedData();
   migrateBookings();
   els.bookingDate.min = todayISO();
@@ -197,9 +191,20 @@ function bindEvents() {
     event.preventDefault();
     const form = new FormData(els.barberLoginForm);
     const password = String(form.get("password")).trim();
+    const passwordConfirm = String(form.get("passwordConfirm")).trim();
     const barber = String(form.get("barber"));
 
-    if (!matchesBarberPassword(barber, password)) {
+    if (!getBarberPassword(barber)) {
+      if (password.length < 4) {
+        showBarberLoginError("La contraseña tiene que tener al menos 4 caracteres.");
+        return;
+      }
+      if (password !== passwordConfirm) {
+        showBarberLoginError("Las contraseñas no coinciden.");
+        return;
+      }
+      saveBarberPassword(barber, password);
+    } else if (!matchesBarberPassword(barber, password)) {
       showBarberLoginError("Contraseña incorrecta.");
       return;
     }
@@ -345,6 +350,7 @@ function bindEvents() {
     els.adminDialog.showModal();
   });
   els.closeAdmin.addEventListener("click", () => els.adminDialog.close());
+  els.closeClientFile.addEventListener("click", () => els.clientFileDialog.close());
   els.openPlanning.addEventListener("click", () => {
     renderPlanningBoard();
     els.planningDialog.showModal();
@@ -429,14 +435,17 @@ function openBarberLogin() {
 
 function renderBarberLoginMode() {
   const selectedRole = els.barberLoginSelect.value;
+  const hasPassword = Boolean(getBarberPassword(selectedRole));
   const label = selectedRole === "admin" ? "Administración" : getBarber(selectedRole).name;
 
-  els.barberLoginTitle.textContent = `Entrar como ${label}`;
-  els.barberLoginHelp.textContent = "Ingresá la clave privada del panel Lux.";
-  els.barberPasswordLabel.textContent = "Contraseña";
-  els.barberPassword.placeholder = "Clave del panel";
-  els.barberPasswordConfirmField.hidden = true;
-  els.barberPasswordConfirm.required = false;
+  els.barberLoginTitle.textContent = hasPassword ? `Entrar como ${label}` : `Crear clave para ${label}`;
+  els.barberLoginHelp.textContent = hasPassword
+    ? "Ingresá la clave privada del panel Lux."
+    : "Primera vez: creá una contraseña para este acceso.";
+  els.barberPasswordLabel.textContent = hasPassword ? "Contraseña" : "Nueva contraseña";
+  els.barberPassword.placeholder = hasPassword ? "Clave del panel" : "Mínimo 4 caracteres";
+  els.barberPasswordConfirmField.hidden = hasPassword;
+  els.barberPasswordConfirm.required = !hasPassword;
   els.barberLoginError.hidden = true;
 }
 
@@ -604,7 +613,6 @@ function renderPanel() {
 function renderAdmin() {
   renderBarberLedger();
   renderClients();
-  renderPanelClientFile();
   renderManualBookingSlots();
 }
 
@@ -716,23 +724,21 @@ function renderClients() {
   els.clientList.querySelectorAll("[data-select-client]").forEach((button) => {
     button.addEventListener("click", () => {
       state.panelSelectedPhone = button.dataset.selectClient;
-      renderAdmin();
+      renderClientFileDialog();
     });
   });
 }
 
-function renderPanelClientFile() {
+function renderClientFileDialog() {
   const clients = getClients();
   const selected = getClient(state.panelSelectedPhone) || clients[0];
 
   if (!selected) {
-    els.selectedPanelClientStatus.textContent = "Sin selección";
-    els.panelClientFile.innerHTML = `<p>Cargá o seleccioná un cliente para ver su ficha.</p>`;
     return;
   }
 
   state.panelSelectedPhone = selected.phone;
-  els.selectedPanelClientStatus.textContent = "Activo";
+  els.clientFileTitle.textContent = clientFullName(selected);
 
   const bookings = getBookings()
     .filter((booking) => normalizePhone(booking.phone) === selected.phone)
@@ -741,7 +747,7 @@ function renderPanelClientFile() {
     .filter((booking) => booking.status !== "cancelled")
     .reduce((total, booking) => total + (booking.paidAmount || getService(booking.serviceId).price), 0);
 
-  els.panelClientFile.innerHTML = `
+  els.clientFileBody.innerHTML = `
     <div class="file-card">
       <div class="file-card-main">
         ${clientPhotoTemplate(selected, "large")}
@@ -785,7 +791,7 @@ function renderPanelClientFile() {
     </div>
   `;
 
-  document.querySelector("#client-edit-form").addEventListener("submit", async (event) => {
+  els.clientFileBody.querySelector("#client-edit-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const photo = await imageFileToDataUrl(form.get("photo"));
@@ -797,6 +803,10 @@ function renderPanelClientFile() {
       photoData: photo,
     });
   });
+
+  if (!els.clientFileDialog.open) {
+    els.clientFileDialog.showModal();
+  }
 }
 
 function appointmentTemplate(booking) {
@@ -1142,6 +1152,9 @@ function updateClientProfile(originalPhone, data) {
   renderAuth();
   renderPanel();
   renderAdmin();
+  if (els.clientFileDialog.open) {
+    renderClientFileDialog();
+  }
 }
 
 function showManualBookingStatus(message, isError = true) {
@@ -1202,11 +1215,11 @@ function getActiveClient() {
 }
 
 function getClient(phone) {
-  return getClients().find((client) => client.phone === normalizePhone(phone));
+  return state.clients.find((client) => client.phone === normalizePhone(phone) && !client.archived);
 }
 
 function getClients() {
-  return state.clients;
+  return state.clients.filter((client) => !client.archived);
 }
 
 function saveClients(clients) {
@@ -1223,7 +1236,7 @@ function upsertClient(data) {
   const phone = normalizePhone(data.phone);
   if (!phone || !data.firstName || !data.lastName) return null;
 
-  const clients = getClients();
+  const clients = state.clients;
   const existing = clients.find((client) => client.phone === phone);
   const client = {
     phone,
@@ -1234,6 +1247,7 @@ function upsertClient(data) {
     createdAt: existing?.createdAt || todayISO(),
     photoData: data.photoData || existing?.photoData || "",
     status: data.status || existing?.status || "active",
+    archived: false,
   };
 
   saveClients(existing ? clients.map((item) => (item.phone === phone ? client : item)) : [...clients, client]);
@@ -1241,8 +1255,23 @@ function upsertClient(data) {
 }
 
 function seedData() {
-  if (!localStorage.getItem(clientStoreKey)) saveClients(defaultClients);
-  if (!localStorage.getItem(bookingStoreKey)) saveBookings(defaultBookings);
+  if (!localStorage.getItem(clientStoreKey)) localStorage.setItem(clientStoreKey, JSON.stringify(defaultClients));
+  if (!localStorage.getItem(bookingStoreKey)) localStorage.setItem(bookingStoreKey, JSON.stringify(defaultBookings));
+}
+
+function resetLocalDemoData() {
+  localStorage.removeItem(legacyBarberPasswordStoreKey);
+  if (localStorage.getItem(resetStoreKey)) return;
+  localStorage.setItem(clientStoreKey, JSON.stringify([]));
+  localStorage.setItem(bookingStoreKey, JSON.stringify([]));
+  localStorage.removeItem(activeClientKey);
+  localStorage.removeItem(barberPasswordStoreKey);
+  sessionStorage.removeItem(barberSessionKey);
+  state.clients = [];
+  state.bookings = [];
+  state.activePhone = "";
+  state.barberSession = null;
+  localStorage.setItem(resetStoreKey, "done");
 }
 
 function migrateBookings() {
@@ -1277,20 +1306,23 @@ function getBarber(id) {
 }
 
 function getBarberPasswords() {
-  localStorage.removeItem(barberPasswordStoreKey);
-  return {};
+  localStorage.removeItem(legacyBarberPasswordStoreKey);
+  return JSON.parse(localStorage.getItem(barberPasswordStoreKey) || "{}");
 }
 
 function getBarberPassword(role) {
-  return fixedBarberPassword;
+  return getBarberPasswords()[role] || "";
 }
 
 function saveBarberPassword(role, password) {
-  localStorage.removeItem(barberPasswordStoreKey);
+  const passwords = getBarberPasswords();
+  passwords[role] = encodePassword(normalizeAccessPassword(password));
+  localStorage.setItem(barberPasswordStoreKey, JSON.stringify(passwords));
 }
 
 function matchesBarberPassword(role, password) {
-  return normalizeAccessPassword(password) === normalizeAccessPassword(fixedBarberPassword);
+  const savedPassword = getBarberPassword(role);
+  return Boolean(savedPassword) && savedPassword === encodePassword(normalizeAccessPassword(password));
 }
 
 function encodePassword(password) {
@@ -1625,17 +1657,19 @@ function fromCloudClient(client) {
     notes: meta.notes,
     photoData: meta.photoData,
     status: meta.status,
+    archived: meta.archived,
     source: client.source || "client",
     createdAt: client.created_at || todayISO(),
   };
 }
 
 function packClientNotes(client) {
-  if (!client.photoData && (!client.status || client.status === "active")) return client.notes || "";
+  if (!client.photoData && (!client.status || client.status === "active") && !client.archived) return client.notes || "";
   return JSON.stringify({
     notes: client.notes || "",
     photoData: client.photoData,
     status: client.status || "active",
+    archived: Boolean(client.archived),
   });
 }
 
@@ -1647,12 +1681,14 @@ function unpackClientNotes(value) {
       notes: parsed.notes || "",
       photoData: parsed.photoData || "",
       status: parsed.status || "active",
+      archived: Boolean(parsed.archived),
     };
   } catch {
     return {
       notes: text,
       photoData: "",
       status: "active",
+      archived: false,
     };
   }
 }
