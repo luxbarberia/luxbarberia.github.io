@@ -1,0 +1,25 @@
+{
+  "name": "FindeMes - Gastos personales",
+  "short_name": "FindeMes",
+  "description": "Gestiona gastos, ingresos, presupuestos y predicciones mensuales sin salir de tu celular.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7fbfa",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "public/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "public/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
